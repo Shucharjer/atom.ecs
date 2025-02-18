@@ -1,0 +1,11 @@
+Checks: >
+    bugprone-*,
+    concurrency-*,
+    cppcoreguidelines-*,
+    -cppcoreguidelines-owning-memory,
+    -cppcoreguidelines-pro-type-const-cast,
+    modernize-*,
+    -modernize-use-trailing-return-type,
+    performance-*,
+    portability-*,
+    readibility-*

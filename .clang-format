@@ -1,0 +1,123 @@
+# 基于的风格
+BasedOnStyle: Microsoft
+
+# 缩进宽度
+IndentWidth: 4
+# 不使用Tab
+UseTab: false
+# 一行的长度限制
+ColumnLimit: 100
+# 赋值语句对齐
+AlignConsecutiveAssignments: true
+# 短函数可以单行存在
+AllowShortFunctionsOnASingleLine: true
+# 注释对齐
+AlignTrailingComments:
+    Kind: Always
+    # 只对齐1行以内的注释
+    OverEmptyLines: 1
+
+# C++
+Language: Cpp
+
+# 仅排序连着的include语句
+IncludeBlocks: Preserve
+# 按照这样的顺序排序：本文件对应的头文件，C++标准库的头文件，其它库的头文件，本项目的头文件
+# 本项目的头文件都应使用""，其余均使用<>
+SortIncludes: true
+# 优先级越低排序越靠前
+IncludeCategories:
+    # 本项目的头文件
+    - Regex: '"[a-zA-Z]+([^"])*\.h"'
+      Priority: 6
+      CaseSensitive: false
+    # 本项目中以.hpp结尾的（不推荐这种写法，头文件应统一使用.h结尾）
+    - Regex: '"[a-zA-Z]+[^"]*\.hpp"'
+      Priority: 5
+      CaseSensitive: false
+    # 其它库头文件以.hpp结尾的
+    - Regex: '<[a-zA-Z]+.*\.hpp>'
+      Priority: 4
+      CaseSensitive: false
+    # 其它库文件路径中带有子目录的
+    - Regex: '<[a-zA-Z]+.*\.h>'
+      Priority: 3
+      CaseSensitive: false
+    # 其它库的头文件路径中不带有子目录的
+    - Regex: '<[a-zA-Z]+[^/]*\.h>'
+      Priority: 2
+      CaseSensitive: false
+    # 只是用尖括号而不带多半是C++标准库的头文件
+    - Regex: '<[a-zA-Z]+[^/]*>'
+      Priority: 1
+      CaseSensitive: false
+    # 本文件对应的头文件的优先级默认是0
+
+SortUsingDeclarations: LexicographicNumeric
+
+# 权限修饰符的偏移
+AccessModifierOffset: -4
+
+AlignAfterOpenBracket: BlockIndent
+
+# 大括号换行
+BraceWrapping:
+    # 类后
+    AfterClass: false
+    # if语句后
+    AfterControlStatement: false
+    # 枚举后
+    AfterEnum: false
+    # 函数后
+    AfterFunction: false
+    # 命名空间后
+    AfterNamespace: false
+    # 结构体后
+    AfterStruct: false
+    # 联合体后
+    AfterUnion: false
+# 都不换行
+
+# 命名空间后缩进
+NamespaceIndentation: None
+# case块后没有缩进
+IndentCaseBlocks: false
+# case标签后没有缩进
+IndentCaseLabels: false
+# extern块后缩进
+IndentExternBlock: Indent
+# requires后没有缩进
+IndentRequiresClause: false
+# 预处理语句连带#符号有缩进
+IndentPPDirectives: BeforeHash
+# 长函数名换行后缩进
+IndentWrappedFunctionNames: true
+
+# 文件尾部新行
+InsertNewlineAtEOF: true
+
+# 结构体数组右对齐
+AlignArrayOfStructures: Right
+
+# 只允许空的短语句块单行存在
+AllowShortBlocksOnASingleLine: Empty
+# 不允许短枚举单行存在
+AllowShortEnumsOnASingleLine: false
+# 不允许短if语句单行存在
+AllowShortIfStatementsOnASingleLine: false
+# 不允许短lambda表达式单行存在
+AllowShortLambdasOnASingleLine: true
+# 不允许短循环单行存在
+AllowShortLoopsOnASingleLine: false
+
+# Bin是装箱的意思，这里可以理解为让它紧凑
+# 装箱实参
+BinPackArguments: false
+# 装箱形参
+BinPackParameters: false
+# 模板后换行
+AlwaysBreakTemplateDeclarations: Yes
+# 括号列表
+Cpp11BracedListStyle: false
+# 指针左对齐
+PointerAlignment: Left
