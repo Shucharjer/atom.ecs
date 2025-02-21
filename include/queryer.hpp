@@ -4,7 +4,7 @@
 #include <memory/pool.hpp>
 #include <memory/storage.hpp>
 #include "ecs.hpp"
-#include "reflection/hash.hpp"
+#include "reflection.hpp"
 #include "world.hpp"
 
 namespace atom::ecs {

@@ -1,6 +1,5 @@
 #pragma once
-#include <reflection/description.hpp>
-#include "reflection/description.hpp"
+#include <reflection.hpp>
 
 namespace atom::ecs::bits {
 

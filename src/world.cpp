@@ -1,6 +1,8 @@
 #include "world.hpp"
 #include <latch>
+#include <memory/allocator.hpp>
 #include <memory/pool.hpp>
+#include <reflection.hpp>
 #include <thread/thread_pool.hpp>
 #include "command.hpp"
 #include "ecs.hpp"
@@ -24,7 +26,11 @@ ecs::world::world()
       generations_(scheduler::allocator<entity::generation_t>()),
       living_entities_(scheduler::allocator<entity::id_t>()),
       pending_destroy_(scheduler::allocator<entity::id_t>()),
-      pending_components_(scheduler::allocator<std::pair<void (*)(void*), void*>>()),
+      pending_components_(
+          scheduler::allocator<
+              std::tuple<void (*)(void*, utils::basic_allocator*), void*, utils::basic_allocator*>>(
+          )
+      ),
       component_storage_(scheduler::allocator<std::pair<
                              component::id_t,
                              std::tuple<
@@ -40,7 +46,7 @@ void ecs::world::add_startup(void (*func)(ecs::command&, ecs::queryer&), int pri
     startup_systems_.emplace(priority, func);
 }
 
-void ecs::world::add_update(void (*func)(ecs::command&, ecs::queryer&), int priority) {
+void ecs::world::add_update(void (*func)(ecs::command&, ecs::queryer&, float), int priority) {
     update_systems_.emplace(priority, func);
 }
 
@@ -97,6 +103,40 @@ static inline void call_each_system(
 #endif
     }
 }
+
+static inline void call_each_system(
+    std::multimap<int, void (*)(::atom::ecs::command&, ::atom::ecs::queryer&, float)>& systems,
+    ::atom::ecs::command& command,
+    ::atom::ecs::queryer& queryer,
+    float delta_time
+) {
+#ifndef ATOM_SINGLE_THREAD
+    auto& thread_pool = ECS scheduler::thread_pool();
+#endif
+    for (auto iter = systems.crbegin(); iter != systems.crend();) {
+#ifndef ATOM_SINGLE_THREAD
+        auto key         = iter->first;
+        const auto count = systems.count(key);
+        std::latch latch(static_cast<std::ptrdiff_t>(count));
+        for (auto i = 0; i < count; ++i) {
+            const auto& fn = iter->second;
+            auto wrapped_system_fn =
+                [&fn, &latch](
+                    ::atom::ecs::command& command, ::atom::ecs::queryer& queryer, float delta_time
+                ) -> void {
+                fn(command, queryer, delta_time);
+                latch.count_down();
+            };
+            std::ignore = thread_pool.enqueue(wrapped_system_fn, command, queryer, delta_time);
+            ++iter;
+        }
+        latch.wait();
+#else
+        iter->second(command, queryer);
+        ++iter;
+#endif
+    }
+}
 /*! @endcond */
 
 void ::atom::ecs::world::startup() {
@@ -106,10 +146,10 @@ void ::atom::ecs::world::startup() {
     startup_garbage_collect(command);
 }
 
-void ::atom::ecs::world::update() {
+void ::atom::ecs::world::update(float delta_time) {
     auto command = ::atom::ecs::command{ this };
     auto queryer = ::atom::ecs::queryer{ this };
-    call_each_system(update_systems_, command, queryer);
+    call_each_system(update_systems_, command, queryer, delta_time);
     update_garbage_collect(command, queryer);
 }
 

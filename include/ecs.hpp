@@ -1,6 +1,6 @@
 #pragma once
 #include "core.hpp"
-#include "reflection/registry.hpp"
+#include "reflection.hpp"
 
 #define ECS ::atom::ecs::
 

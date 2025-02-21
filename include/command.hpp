@@ -3,12 +3,13 @@
 #include <type_traits>
 #include <memory/pool.hpp>
 #include <memory/storage.hpp>
+#include <reflection.hpp>
 #include "core.hpp"
 #include "ecs.hpp"
 #include "memory.hpp"
 #include "memory/allocator.hpp"
-#include "reflection/hash.hpp"
 #include "scheduler.hpp"
+#include "signal/lambda.hpp"
 #include "world.hpp"
 
 static inline const auto k_thirty_two = 32;
@@ -60,7 +61,7 @@ private:
         const auto identity = component_registry::identity(hash);
         check_map_existance<Component>(identity);
 
-        auto& [map, basic_allocator, reflected] = world_->component_storage_.at(identity);
+        auto& [map, basic_allocator] = world_->component_storage_.at(identity);
         map.emplace(entity, nullptr);
     }
 
@@ -78,7 +79,7 @@ private:
         const auto identity = component_registry::identity(hash);
         check_map_existance<pure>(identity);
 
-        auto& [map, basic_allocator, reflected] = world_->component_storage_.at(identity);
+        auto& [map, basic_allocator, basic_reflected] = world_->component_storage_.at(identity);
         auto* allocator =
             static_cast<utils::allocator<pure, utils::synchronized_pool>*>(basic_allocator);
         pure* ptr = allocator->allocate(1);
@@ -158,9 +159,14 @@ private:
         if (auto iter = world_->component_storage_.find(identity);
             iter != world_->component_storage_.cend()) [[likely]] {
             auto& [map, allocator, reflected] = iter->second;
+            auto fn = [](void* ptr, utils::basic_allocator* allocator) -> void {
+                constexpr auto reflected = utils::reflected<Component>();
+                reflected.destroy(ptr);
+                allocator->dealloc(ptr);
+            };
             if (map.contains(entity)) [[likely]] {
                 world_->pending_components_.emplace_back(
-                    reflected->cextend().info.destroy, map.at(entity)
+                    utils::make_function_ptr<fn>(), map.at(entity), allocator
                 );
                 map.erase(entity);
             }
@@ -280,8 +286,8 @@ public:
 private:
     void update_garbage_collect() {
         // single component
-        for (auto& [destroy, ptr] : world_->pending_components_) {
-            destroy(ptr);
+        for (auto& [del, ptr, allocator] : world_->pending_components_) {
+            del(ptr, allocator);
         }
 
         // whole entity
@@ -290,6 +296,7 @@ private:
                  world_->component_storage_ | std::views::values) {
                 for (auto* ptr : map | std::views::values) {
                     reflected->destroy(ptr);
+                    allocator->dealloc(ptr);
                 }
             }
         }
@@ -298,8 +305,8 @@ private:
     void shutdown_garbage_collect() {
         // entities and their components
 
-        for (auto& [destroy, ptr] : world_->pending_components_) {
-            destroy(ptr);
+        for (auto& [del, ptr, allocator] : world_->pending_components_) {
+            del(ptr, allocator);
         }
         world_->pending_components_.clear();
 
@@ -307,6 +314,7 @@ private:
             for (auto* ptr : map | std::views::values) {
                 if (ptr) {
                     reflected->destroy(ptr);
+                    allocator->dealloc(ptr);
                 }
             }
             map.clear();
