@@ -1,6 +1,7 @@
 #pragma once
 #include <exception>
 #include <ranges>
+#include <stdexcept>
 #include <memory/pool.hpp>
 #include <memory/storage.hpp>
 #include "ecs.hpp"
@@ -13,8 +14,6 @@ namespace atom::ecs {
  *
  */
 class queryer {
-    using world_attorney = ::atom::ecs::internal::world_attorney;
-
 public:
     explicit queryer(::atom::ecs::world* const world) noexcept : world_(world) {}
 
@@ -132,12 +131,12 @@ public:
 
         // find the tuple
         if (auto iter = world_->component_storage_.find(identity);
-            iter != world_->component_storage_.cend()) [[likely]] {
+            iter != world_->component_storage_.end()) [[likely]] {
             auto& pair                              = *iter;
             auto& [map, basic_allocator, reflected] = pair.second;
 
             // get the component in the internal map
-            if (auto iter = map.find(entity); iter != map.cend()) [[likely]] {
+            if (auto iter = map.find(entity); iter != map.end()) [[likely]] {
                 auto& pair = *iter;
 
                 // if the component refers to a null pointer
@@ -156,11 +155,11 @@ public:
                 }
             }
             else {
-                throw std::exception("Couldn't get not exist component!");
+                throw std::runtime_error("Couldn't get not exist component!");
             }
         }
 
-        throw std::exception("Couldn't get not exist component!");
+        throw std::runtime_error("Couldn't get not exist component!");
     }
 
     template <typename Component>
@@ -193,7 +192,7 @@ public:
         auto hash     = utils::hash_of<Resource>();
         auto identity = resource_registry::identity(hash);
         if (auto iter = world_->resource_storage_.find(identity);
-            iter != world_->resource_storage_.cend()) {
+            iter != world_->resource_storage_.end()) {
             utils::basic_storage* basic_storage = (*iter).second;
             return static_cast<Resource*>(basic_storage->raw());
         }

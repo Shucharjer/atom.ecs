@@ -16,8 +16,6 @@ static inline const auto k_thirty_two = 32;
 
 namespace atom::ecs {
 class command {
-    using world_attorney = ECS internal::world_attorney;
-
 public:
     struct command_attorney;
     friend struct command_attorney;
@@ -61,7 +59,7 @@ private:
         const auto identity = component_registry::identity(hash);
         check_map_existance<Component>(identity);
 
-        auto& [map, basic_allocator] = world_->component_storage_.at(identity);
+        auto& [map, basic_allocator, reflected] = world_->component_storage_.at(identity);
         map.emplace(entity, nullptr);
     }
 
@@ -187,7 +185,7 @@ public:
     template <std::ranges::range Rng>
     requires std::is_same_v<std::iter_value_t<Rng>, entity::id_t>
     auto kill(Rng&& range) -> void {
-        world_.pending_destroy_.append_range(std::forward<Rng>(range));
+        world_->pending_destroy_.append_range(std::forward<Rng>(range));
     }
 #else
     template <std::ranges::range Rng>
@@ -240,7 +238,7 @@ private:
 public:
     template <typename... Resources>
     void add(Resources&&... resources) {
-        (add_impl<Resources...>(std::forward<Resources>(resources)), ...);
+        (add_impl<Resources>(std::forward<Resources>(resources)), ...);
     }
 
 private:
