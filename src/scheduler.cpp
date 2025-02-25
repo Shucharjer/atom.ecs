@@ -11,8 +11,3 @@ auto atom::ecs::scheduler::thread_pool() noexcept -> atom::utils::thread_pool& {
     static atom::utils::thread_pool pool;
     return pool;
 }
-
-auto atom::ecs::scheduler::dustbin() noexcept -> std::vector<std::pair<void (*)(void*), void*>>& {
-    static std::vector<std::pair<void (*)(void*), void*>> dustbin;
-    return dustbin;
-}

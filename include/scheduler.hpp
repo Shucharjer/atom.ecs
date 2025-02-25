@@ -17,8 +17,6 @@ struct scheduler {
     }
 
     [[nodiscard]] static auto thread_pool() noexcept -> atom::utils::thread_pool&;
-
-    [[nodiscard]] static auto dustbin() noexcept -> std::vector<std::pair<void (*)(void*), void*>>&;
 };
 
 } // namespace atom::ecs
