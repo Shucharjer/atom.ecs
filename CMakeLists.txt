@@ -23,6 +23,16 @@ target_include_directories(Ecs INTERFACE
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+option(ATOM_USE_PMR_CONTAINER OFF)
+if (ATOM_USE_PMR_CONTAINER)
+    add_compile_definitions(ATOM_USE_PMR_CONTAINER)
+endif()
+
+option(ATOM_SINGLE_THREAD OFF)
+if (ATOM_SINGLE_THREAD)
+    add_compile_definitions(ATOM_SINGLE_THREAD)
+endif()
+
 include(CMakePackageConfigHelpers)
 
 find_package(Utils CONFIG REQUIRED)
