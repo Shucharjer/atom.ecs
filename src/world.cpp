@@ -21,8 +21,9 @@ struct atom::ecs::command::command_attorney {
     }
 };
 
+#ifndef ATOM_USE_PMR_CONTAINER
 ecs::world::world()
-    : free_indices_(scheduler::allocator<entity::index_t>()),
+    : shutdown_(false), free_indices_(scheduler::allocator<entity::index_t>()),
       generations_(scheduler::allocator<entity::generation_t>()),
       living_entities_(scheduler::allocator<entity::id_t>()),
       pending_destroy_(scheduler::allocator<entity::id_t>()),
@@ -39,20 +40,28 @@ ecs::world::world()
                                  utils::basic_reflected*>>>()),
       resource_storage_(scheduler::allocator<std::pair<resource::id_t, utils::basic_storage*>>()),
       startup_systems_(), update_systems_(), shutdown_systems_() {}
+#else
+ecs::world::world() = default;
+#endif
 
-ecs::world::~world() { shutdown(); }
+ecs::world::~world() {
+    if (!shutdown_) {
+        shutdown();
+    }
+}
 
-void ecs::world::add_startup(void (*func)(ecs::command&, ecs::queryer&), int priority) {
+void ecs::world::add_startup(void (*func)(ecs::command&, ecs::queryer&), const priority priority) {
     startup_systems_.emplace(priority, func);
 }
 
-void ecs::world::add_update(void (*func)(ecs::command&, ecs::queryer&, float), int priority) {
+void ecs::world::add_update(void (*func)(ecs::command&, ecs::queryer&, float), const priority priority) {
     update_systems_.emplace(priority, func);
 }
 
-void ecs::world::add_shutdown(void (*func)(ecs::command&, ecs::queryer&), int priority) {
+void ecs::world::add_shutdown(void (*func)(ecs::command&, ecs::queryer&), const priority priority) {
     shutdown_systems_.emplace(priority, func);
 }
+
 /*! @cond TURN_OFF_DOXYGEN */
 
 static inline void startup_garbage_collect(ecs::command& command) {
@@ -72,70 +81,38 @@ static inline void update_garbage_collect(
     }
 }
 
-static inline void call_each_system(
-    std::multimap<int, void (*)(::atom::ecs::command&, ::atom::ecs::queryer&)>& systems,
-    ::atom::ecs::command& command,
-    ::atom::ecs::queryer& queryer
-) {
+template <typename Systems, typename... Args>
+static inline void call_each_system(Systems& systems, Args&... args) {
 #ifndef ATOM_SINGLE_THREAD
     auto& thread_pool = ECS scheduler::thread_pool();
-#endif
     for (auto iter = systems.crbegin(); iter != systems.crend();) {
-#ifndef ATOM_SINGLE_THREAD
         auto key         = iter->first;
         const auto count = systems.count(key);
-        std::latch latch(static_cast<std::ptrdiff_t>(count));
-        for (auto i = 0; i < count; ++i) {
-            const auto& fn = iter->second;
-            auto wrapped_system_fn =
-                [&fn,
-                 &latch](::atom::ecs::command& command, ::atom::ecs::queryer& queryer) -> void {
-                fn(command, queryer);
-                latch.count_down();
-            };
-            std::ignore = thread_pool.enqueue(wrapped_system_fn, command, queryer);
-            ++iter;
+        if (key != ecs::only_main_thread) {
+            std::latch latch(static_cast<std::ptrdiff_t>(count));
+            for (auto i = 0; i < count; ++i) {
+                auto backup = iter;
+                auto fn     = [&latch, backup](Args&... args) {
+                    backup->second(args...);
+                    latch.count_down();
+                };
+                std::ignore = thread_pool.enqueue(fn, args...);
+                ++iter;
+            }
+            latch.wait();
         }
-        latch.wait();
-#else
-        iter->second(command, queryer);
-        ++iter;
-#endif
-    }
-}
-
-static inline void call_each_system(
-    std::multimap<int, void (*)(::atom::ecs::command&, ::atom::ecs::queryer&, float)>& systems,
-    ::atom::ecs::command& command,
-    ::atom::ecs::queryer& queryer,
-    float delta_time
-) {
-#ifndef ATOM_SINGLE_THREAD
-    auto& thread_pool = ECS scheduler::thread_pool();
-#endif
-    for (auto iter = systems.crbegin(); iter != systems.crend();) {
-#ifndef ATOM_SINGLE_THREAD
-        auto key         = iter->first;
-        const auto count = systems.count(key);
-        std::latch latch(static_cast<std::ptrdiff_t>(count));
-        for (auto i = 0; i < count; ++i) {
-            const auto& fn = iter->second;
-            auto wrapped_system_fn =
-                [&fn, &latch](
-                    ::atom::ecs::command& command, ::atom::ecs::queryer& queryer, float delta_time
-                ) -> void {
-                fn(command, queryer, delta_time);
-                latch.count_down();
-            };
-            std::ignore = thread_pool.enqueue(wrapped_system_fn, command, queryer, delta_time);
-            ++iter;
+        else {
+            for (auto i = 0; i < count; ++i) {
+                iter->second(args...);
+                ++iter;
+            }
         }
-        latch.wait();
-#else
-        iter->second(command, queryer);
-        ++iter;
-#endif
     }
+#else
+    for (auto iter = systems.crbegin(); iter != systems.crend(); ++iter) {
+        iter->second(args...);
+    }
+#endif
 }
 /*! @endcond */
 
@@ -154,10 +131,13 @@ void ::atom::ecs::world::update(float delta_time) {
 }
 
 void ::atom::ecs::world::shutdown() {
-    auto command = ::atom::ecs::command{ this };
-    auto queryer = ::atom::ecs::queryer{ this };
-    call_each_system(shutdown_systems_, command, queryer);
-    command::command_attorney::shutdown_garbage_collect(command);
+    if (!shutdown_) [[likely]] {
+        shutdown_    = true;
+        auto command = ::atom::ecs::command{ this };
+        auto queryer = ::atom::ecs::queryer{ this };
+        call_each_system(shutdown_systems_, command, queryer);
+        command::command_attorney::shutdown_garbage_collect(command);
+    }
 }
 
 auto ::atom::ecs::world::query() noexcept -> ::atom::ecs::queryer {
