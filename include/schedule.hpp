@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <memory/allocator.hpp>
 #include "memory/pool.hpp"
 #include "thread.hpp"
@@ -17,6 +18,16 @@ struct scheduler {
     }
 
     [[nodiscard]] static auto thread_pool() noexcept -> atom::utils::thread_pool&;
+
+    template <typename Ty>
+    [[nodiscard]] static auto allocate(std::size_t count = 1) {
+        return synchronized_pool()->allocate<Ty>(count);
+    }
 };
+
+template <typename Ty, typename... Args>
+inline auto make_shared(Args&&... args) {
+    auto block = nullptr;
+}
 
 } // namespace atom::ecs
