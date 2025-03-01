@@ -2,6 +2,7 @@
 #include <exception>
 #include <ranges>
 #include <stdexcept>
+#include <core/langdef.hpp>
 #include <memory/pool.hpp>
 #include <memory/storage.hpp>
 #include "ecs.hpp"
@@ -105,13 +106,17 @@ public:
      *
      * @warning Please do not call this function if you have other solutions.
      */
-    [[nodiscard]] auto exist(const entity::id_t entity) const -> bool {
-        for (auto e : world_->living_entities_) {
-            if (e == entity) {
-                return true;
-            }
-        }
-        return false;
+    [[nodiscard]] auto exist(const entity::id_t entity) const noexcept -> bool {
+        return world_->living_entities_.find(entity) != world_->living_entities_.cend();
+    }
+
+    [[nodiscard]] auto index(const entity::id_t entity) const noexcept -> entity::index_t {
+        return static_cast<entity::index_t>(entity >> num_thirty_two);
+    }
+
+    [[nodiscard]] auto generation(const entity::id_t entity) const noexcept
+        -> entity::generation_t {
+        return (entity << num_thirty_two) >> num_thirty_two;
     }
 
     /**
@@ -140,10 +145,10 @@ public:
                 auto& pair = *iter;
 
                 // if the component refers to a null pointer
-                if (pair.second) {
+                if (pair.second) [[unlikely]] {
                     return *static_cast<Component*>(pair.second);
                 }
-                else {
+                else [[likely]] {
                     auto* allocator =
                         static_cast<utils::allocator<Component, utils::synchronized_pool>*>(
                             basic_allocator
@@ -151,10 +156,10 @@ public:
                     Component* ptr = allocator->allocate(1);
                     ::new (ptr) Component();
                     pair.second = std::launder(static_cast<Component*>(ptr));
-                    return *static_cast<Component*>(pair.second);
+                    return *ptr;
                 }
             }
-            else {
+            else [[unlikely]] {
                 throw std::runtime_error("Couldn't get not exist component!");
             }
         }

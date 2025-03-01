@@ -15,34 +15,17 @@ using namespace atom;
 struct atom::ecs::command::command_attorney {
     static inline void update_garbage_collect(command& command) {
         command.update_garbage_collect();
+        command.set<resources::garbage_collect::enable_garbage_collect>({false});
     }
     static inline void shutdown_garbage_collect(command& command) {
         command.shutdown_garbage_collect();
     }
 };
 
-#ifndef ATOM_USE_PMR_CONTAINER
-ecs::world::world()
-    : shutdown_(false), free_indices_(scheduler::allocator<entity::index_t>()),
-      generations_(scheduler::allocator<entity::generation_t>()),
-      living_entities_(scheduler::allocator<entity::id_t>()),
-      pending_destroy_(scheduler::allocator<entity::id_t>()),
-      pending_components_(
-          scheduler::allocator<
-              std::tuple<void (*)(void*, utils::basic_allocator*), void*, utils::basic_allocator*>>(
-          )
-      ),
-      component_storage_(scheduler::allocator<std::pair<
-                             component::id_t,
-                             std::tuple<
-                                 utils::sync_dense_map<entity::id_t, void*>,
-                                 utils::basic_allocator*,
-                                 utils::basic_reflected*>>>()),
-      resource_storage_(scheduler::allocator<std::pair<resource::id_t, utils::basic_storage*>>()),
-      startup_systems_(), update_systems_(), shutdown_systems_() {}
-#else
-ecs::world::world() = default;
-#endif
+ecs::world::world() : shutdown_(false), generations_() {
+    // get index from 1
+    generations_.emplace_back(0);
+};
 
 ecs::world::~world() {
     if (!shutdown_) {
@@ -73,7 +56,7 @@ static inline void update_garbage_collect(
 ) {
     auto* penable = queryer.find<resources::garbage_collect::enable_garbage_collect>();
     if (!penable) [[unlikely]] {
-        command.add<resources::garbage_collect::enable_garbage_collect>({ false });
+        command.add<resources::garbage_collect::enable_garbage_collect&&>({ false });
     }
 
     if (penable->value) [[unlikely]] {
@@ -88,7 +71,7 @@ static inline void call_each_system(Systems& systems, Args&... args) {
     for (auto iter = systems.crbegin(); iter != systems.crend();) {
         auto key         = iter->first;
         const auto count = systems.count(key);
-        if (key != ecs::only_main_thread) {
+        if (key != ecs::late_main_thread || ecs::early_main_thread) {
             std::latch latch(static_cast<std::ptrdiff_t>(count));
             for (auto i = 0; i < count; ++i) {
                 auto backup = iter;

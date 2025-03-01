@@ -1,21 +1,19 @@
 #pragma once
-#include <map>
 #include <utility>
+#include "containers.hpp"
 #include "ecs.hpp"
 #include "memory.hpp"
 #include "memory/allocator.hpp"
 #include "memory/pool.hpp"
 #include "memory/storage.hpp"
 #include "reflection.hpp"
-#include "structures/dense_map.hpp"
-#include "structures/linear.hpp"
-#include "structures/map.hpp"
 
 namespace atom::ecs {
 
 enum priority : int {
-    normal_priority = 0,
-    only_main_thread = -1
+    early_main_thread = INT_MAX >> 1,
+    normal_priority   = 0,
+    late_main_thread  = INT_MIN >> 1
 };
 
 class world final {
@@ -105,45 +103,23 @@ public:
 
 private:
     bool shutdown_;
-#ifndef ATOM_USE_PMR_CONTAINER
-    utils::sync_vector<entity::index_t> free_indices_;
-    utils::sync_vector<entity::generation_t> generations_;
-    utils::sync_vector<entity::id_t> living_entities_;
-    utils::sync_vector<entity::id_t> pending_destroy_;
-    utils::sync_vector<
-        std::tuple<void (*)(void*, utils::basic_allocator*), void*, utils::basic_allocator*>>
+    vector<entity::index_t> free_indices_;
+    vector<entity::generation_t> generations_;
+    unordered_set<entity::id_t> living_entities_;
+    vector<entity::id_t> pending_destroy_;
+    vector<std::tuple<void (*)(void*, utils::basic_allocator*), void*, utils::basic_allocator*>>
         pending_components_;
 
-    utils::sync_dense_map<
+    dense_map<
         component::id_t,
-        std::tuple<
-            utils::sync_dense_map<entity::id_t, void*>,
-            utils::basic_allocator*,
-            utils::basic_reflected*>>
+        std::tuple<map<entity::id_t, void*>, utils::basic_allocator*, utils::basic_reflected*>>
         component_storage_;
 
-    utils::sync_dense_map<resource::id_t, utils::basic_storage*> resource_storage_;
+    dense_map<resource::id_t, utils::basic_storage*> resource_storage_;
 
-    std::multimap<priority, void (*)(ecs::command&, ecs::queryer&)> startup_systems_;
-    std::multimap<priority, void (*)(ecs::command&, ecs::queryer&, float)> update_systems_;
-    std::multimap<priority, void (*)(ecs::command&, ecs::queryer&)> shutdown_systems_;
-#else
-    std::pmr::vector<entity::index_t> free_indices_;
-    std::pmr::vector<entity::generation_t> generations_;
-    std::pmr::vector<entity::id_t> living_entities_;
-    std::pmr::vector<entity::id_t> pending_destroy_;
-    std::pmr::vector<std::tuple<void(*)(void*, utils::basic_allocator*), void*, utils::basic_allocator*>>
-        pending_components_;
-
-    utils::pmr::dense_map<component::id_t, std::tuple<utils::pmr::dense_map<entity::id_t, void*>, utils::basic_allocator*, utils::basic_reflected*>>
-        component_storage_;
-
-    utils::pmr::dense_map<resource::id_t, utils::basic_storage*> resource_storage_;
-
-    std::pmr::multimap<int, void (*)(ecs::command&, ecs::queryer&)> startup_systems_;
-    std::pmr::multimap<int, void (*)(ecs::command&, ecs::queryer&, float)> update_systems_;
-    std::pmr::multimap<int, void (*)(ecs::command&, ecs::queryer&)> shutdown_systems_;
-#endif
+    multimap<int, void (*)(ecs::command&, ecs::queryer&)> startup_systems_;
+    multimap<int, void (*)(ecs::command&, ecs::queryer&, float)> update_systems_;
+    multimap<int, void (*)(ecs::command&, ecs::queryer&)> shutdown_systems_;
 };
 
 } // namespace atom::ecs

@@ -1,9 +1,11 @@
 #pragma once
 #include <ranges>
 #include <type_traits>
+#include <core/langdef.hpp>
 #include <memory/pool.hpp>
 #include <memory/storage.hpp>
 #include <reflection.hpp>
+#include "asset.hpp"
 #include "core.hpp"
 #include "ecs.hpp"
 #include "memory.hpp"
@@ -11,8 +13,6 @@
 #include "scheduler.hpp"
 #include "signal/lambda.hpp"
 #include "world.hpp"
-
-static inline const auto k_thirty_two = 32;
 
 namespace atom::ecs {
 class command {
@@ -38,11 +38,7 @@ private:
             world_->component_storage_.emplace(
                 identity,
                 std::make_tuple(
-                    utils::sync_dense_map<entity::id_t, void*>(
-                        utils::allocator<int, utils::synchronized_pool>(
-                            scheduler::synchronized_pool()
-                        )
-                    ),
+                    map<entity::id_t, void*>(),
                     new utils::allocator<RawComponentType, utils::synchronized_pool>(
                         scheduler::synchronized_pool()
                     ),
@@ -64,31 +60,32 @@ private:
     }
 
 public:
-    template <typename... Components>
+    template <utils::concepts::pure... Components>
     auto attach(const ECS entity::id_t entity) -> void {
         (attach_impl<Components>(entity), ...);
     }
 
 private:
-    template <typename Component>
-    void attach_impl(const entity::id_t entity, Component&& value) {
-        using pure          = std::remove_cvref_t<Component>;
-        const auto hash     = utils::hash_of<pure>();
+    template <utils::concepts::pure Component, typename ComponentTy>
+    void attach_impl(const entity::id_t entity, ComponentTy&& value) {
+        ATOM_DEBUG_SHOW_FUNC
+
+        constexpr auto hash = utils::hash_of<Component>();
         const auto identity = component_registry::identity(hash);
-        check_map_existance<pure>(identity);
+        check_map_existance<Component>(identity);
 
         auto& [map, basic_allocator, basic_reflected] = world_->component_storage_.at(identity);
         auto* allocator =
-            static_cast<utils::allocator<pure, utils::synchronized_pool>*>(basic_allocator);
-        pure* ptr = allocator->allocate(1);
-        ::new (ptr) pure(std::forward<Component>(value));
+            static_cast<utils::allocator<Component, utils::synchronized_pool>*>(basic_allocator);
+        Component* ptr = allocator->allocate(1);
+        ::new (ptr) Component(std::forward<ComponentTy>(value));
         map.emplace(entity, std::launder(ptr));
     }
 
 public:
-    template <typename... Components>
-    void attach(const ECS entity::id_t entity, Components&&... components) {
-        (attach_impl<Components>(entity, std::forward<Components>(components)), ...);
+    template <utils::concepts::pure... Components, typename... ComponentTys>
+    void attach(const entity::id_t entity, ComponentTys&&... components) {
+        (attach_impl<Components>(std::forward<ComponentTys>(components)), ...);
     }
 
     auto spawn() -> ECS entity::id_t {
@@ -102,14 +99,14 @@ public:
             world_->generations_.emplace_back(0);
         }
 
-        entity::id_t entity = ((entity::id_t)index << k_thirty_two) | world_->generations_[index];
+        entity::id_t entity = ((entity::id_t)index << num_thirty_two) | world_->generations_[index];
 
-        world_->living_entities_.emplace_back(entity);
+        world_->living_entities_.emplace(entity);
 
-        return index;
+        return entity;
     }
 
-    template <typename... Components>
+    template <utils::concepts::pure... Components>
     requires std::conjunction_v<std::is_same<std::remove_cvref_t<Components>, Components>...>
     auto spawn() -> ECS entity::id_t {
         auto entity = spawn();
@@ -117,10 +114,10 @@ public:
         return entity;
     }
 
-    template <typename... Components>
-    auto spawn(Components&&... components) -> ECS entity::id_t {
+    template <utils::concepts::pure... Components, typename... ComponentTys>
+    auto spawn(ComponentTys&&... components) -> entity::id_t {
         auto entity = spawn();
-        (attach_impl<Components>(entity, std::forward<Components>(components)), ...);
+        (attach_impl<Components>(entity, std::forward<ComponentTys>(components)), ...);
         return entity;
     }
 
@@ -149,7 +146,7 @@ public:
     }
 
 private:
-    template <typename Component>
+    template <utils::concepts::pure Component>
     void detach_impl(const entity::id_t entity) {
         auto hash     = utils::hash_of<Component>();
         auto identity = component_registry::identity(hash);
@@ -159,8 +156,10 @@ private:
             auto& [map, allocator, reflected] = iter->second;
             auto fn = [](void* ptr, utils::basic_allocator* allocator) -> void {
                 constexpr auto reflected = utils::reflected<Component>();
-                reflected.destroy(ptr);
-                allocator->dealloc(ptr);
+                if (ptr) [[likely]] {
+                    reflected.destroy(ptr);
+                    allocator->dealloc(ptr);
+                }
             };
             if (map.contains(entity)) [[likely]] {
                 world_->pending_components_.emplace_back(
@@ -179,6 +178,7 @@ public:
 
     auto kill(const ::atom::ecs::entity::id_t entity) -> void {
         world_->pending_destroy_.emplace_back(entity);
+        world_->living_entities_.erase(entity);
     }
 
 #if _HAS_CXX23
@@ -203,6 +203,7 @@ public:
 
 private:
     template <typename Resource>
+    requires(!concepts::asset<Resource>)
     void add_impl() {
         auto hash     = utils::hash_of<Resource>();
         auto identity = resource_registry::identity(hash);
@@ -227,7 +228,12 @@ private:
         auto hash     = utils::hash_of<pure>();
         auto identity = resource_registry::identity(hash);
 
-        using storage_t = UTILS unique_storage<Resource>;
+        if constexpr (concepts::asset<pure>) {
+            // TODO:
+            auto& hub = hub::instance();
+        }
+
+        using storage_t = UTILS unique_storage<pure>;
         if (!world_->resource_storage_.contains(identity)) {
             auto* storage = new storage_t();
             (*storage)    = std::forward<Resource>(val);
@@ -244,15 +250,16 @@ public:
 private:
     template <typename Resource>
     void set_impl(Resource&& val) {
-        auto hash     = utils::hash_of<Resource>();
+        using pure    = std::remove_cvref_t<Resource>;
+        auto hash     = utils::hash_of<pure>();
         auto identity = resource_registry::identity(hash);
 
-        using storage_t = UTILS unique_storage<Resource>;
+        using storage_t = UTILS unique_storage<pure>;
         if (auto iter = world_->resource_storage_.find(identity);
             iter != world_->resource_storage_.cend()) [[likely]] {
             utils::basic_storage* basic_storage = world_->resource_storage_.at(identity);
             auto* storage                       = static_cast<storage_t*>(basic_storage);
-            storage                             = std::forward<Resource>(val);
+            *storage                            = std::forward<Resource>(val);
         }
     }
 
@@ -287,17 +294,25 @@ private:
         for (auto& [del, ptr, allocator] : world_->pending_components_) {
             del(ptr, allocator);
         }
+        world_->pending_components_.clear();
 
         // whole entity
         for (auto entity : world_->pending_destroy_) {
             for (auto& [map, allocator, reflected] :
                  world_->component_storage_ | std::views::values) {
-                for (auto* ptr : map | std::views::values) {
-                    reflected->destroy(ptr);
-                    allocator->dealloc(ptr);
+                if (auto iter = map.find(entity); iter != map.end()) {
+                    if (iter->second) [[likely]] {
+                        reflected->destroy(iter->second);
+                        allocator->dealloc(iter->second);
+                    }
                 }
+                map.erase(entity);
             }
+            world_->free_indices_.emplace_back(static_cast<entity::index_t>(entity >> num_thirty_two)
+            );
+            ++world_->generations_[entity >> num_thirty_two];
         }
+        world_->pending_destroy_.clear();
     }
 
     void shutdown_garbage_collect() {
@@ -310,12 +325,11 @@ private:
 
         for (auto& [map, allocator, reflected] : world_->component_storage_ | std::views::values) {
             for (auto* ptr : map | std::views::values) {
-                if (ptr) {
+                if (ptr) [[likely]] {
                     reflected->destroy(ptr);
                     allocator->dealloc(ptr);
                 }
             }
-            map.clear();
         }
         world_->component_storage_.clear();
 
