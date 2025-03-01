@@ -22,10 +22,18 @@ struct resource {
 
 enum class asset_type : unsigned char;
 
-struct basic_asset;
+namespace concepts {
 
-template <typename>
-struct asset;
+template <typename Ty>
+concept asset = requires {
+    std::declval<Ty>().path();
+    { std::declval<Ty>().type() } -> std::same_as<asset_type>;
+};
+
+} // namespace concepts
+
+template <concepts::asset Ty>
+class asset;
 
 class world;
 class command;
