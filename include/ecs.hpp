@@ -1,4 +1,5 @@
 #pragma once
+#include <concepts>
 #include "core.hpp"
 #include "reflection.hpp"
 
@@ -20,20 +21,21 @@ struct resource {
     using id_t = default_id_t;
 };
 
+using resource_handle = uint32_t;
+
 enum class asset_type : unsigned char;
 
 namespace concepts {
 
 template <typename Ty>
-concept asset = requires {
-    std::declval<Ty>().path();
-    { std::declval<Ty>().type() } -> std::same_as<asset_type>;
+concept asset = requires(Ty& obj) {
+    typename Ty::proxy_type;
+    { obj.get_handle() } -> std::same_as<resource_handle>;
+    obj.set_handle(std::declval<resource_handle>());
+    { obj.type() } -> std::same_as<asset_type>;
 };
 
 } // namespace concepts
-
-template <concepts::asset Ty>
-class asset;
 
 class world;
 class command;
