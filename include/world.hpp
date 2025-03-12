@@ -112,7 +112,10 @@ private:
 
     dense_map<
         component::id_t,
-        std::tuple<map<entity::id_t, void*>, utils::basic_allocator*, utils::basic_reflected*>>
+        std::tuple<
+            dense_map<entity::index_t, void*>,
+            utils::basic_allocator*,
+            utils::basic_reflected*>>
         component_storage_;
 
     dense_map<resource::id_t, utils::basic_storage*> resource_storage_;

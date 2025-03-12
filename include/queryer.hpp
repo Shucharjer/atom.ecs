@@ -129,10 +129,10 @@ public:
      * @param entity entity id
      * @return Constant reference of the object
      */
-    template <typename Component>
+    template <typename Component, auto hash = utils::hash_of<Component>()>
     [[nodiscard]] auto get(const entity::id_t entity) -> Component& {
-        auto hash     = utils::hash_of<Component>();
-        auto identity = component_registry::identity(hash);
+        const auto identity         = component_registry::identity(hash);
+        const entity::index_t index = entity >> num_thirty_two;
 
         // find the tuple
         if (auto iter = world_->component_storage_.find(identity);
@@ -141,45 +141,51 @@ public:
             auto& [map, basic_allocator, reflected] = pair.second;
 
             // get the component in the internal map
-            if (auto iter = map.find(entity); iter != map.end()) [[likely]] {
+            if (auto iter = map.find(index); iter != map.end()) [[likely]] {
                 auto& pair = *iter;
 
-                // if the component refers to a null pointer
-                if (pair.second) [[unlikely]] {
+                // if the component does not refers to a null pointer
+                if (pair.second) [[likely]] {
                     return *static_cast<Component*>(pair.second);
                 }
-                else [[likely]] {
-                    auto* allocator =
-                        static_cast<utils::allocator<Component, utils::synchronized_pool>*>(
-                            basic_allocator
-                        );
-                    Component* ptr = allocator->allocate(1);
-                    ::new (ptr) Component();
-                    pair.second = std::launder(static_cast<Component*>(ptr));
-                    return *ptr;
+                else [[unlikely]] {
+                    if constexpr (std::is_default_constructible_v<Component>) {
+                        auto* allocator =
+                            static_cast<utils::allocator<Component, utils::synchronized_pool>*>(
+                                basic_allocator
+                            );
+                        Component* ptr = allocator->allocate(1);
+                        ::new (ptr) Component();
+                        pair.second = std::launder(static_cast<Component*>(ptr));
+                        return *ptr;
+                    }
+                    else {
+                        throw std::runtime_error("Couldn't get empty component!");
+                    }
                 }
             }
             else [[unlikely]] {
-                throw std::runtime_error("Couldn't get not exist component!");
+                throw std::runtime_error("Couldn't get component not existed!");
             }
         }
-
-        throw std::runtime_error("Couldn't get not exist component!");
+        else {
+            throw std::runtime_error("Couldn't get component without map!");
+        }
     }
 
-    template <typename Component>
+    template <typename Component, auto hash = utils::hash_of<Component>()>
     [[nodiscard]] auto get(const entity::id_t entity) const -> const Component& {
-        auto hash     = utils::hash_of<Component>();
-        auto identity = component_registry::identity(hash);
+        const auto identity         = component_registry::identity(hash);
+        const entity::index_t index = entity >> num_thirty_two;
 
         if (auto iter = world_->component_storage_.find(identity);
             iter != world_->component_storage_.cend()) [[likely]] {
             auto& [map, allocator, reflected] = iter->second;
-            if (auto iter = map.find(entity); iter != map.cend()) [[likely]] {
+            if (auto iter = map.find(index); iter != map.cend()) [[likely]] {
                 return *static_cast<Component*>(iter->second);
             }
             else {
-                throw std::exception("Couldn't get not exist component!");
+                throw std::runtime_error("Couldn't get not exist component!");
             }
         }
     }
@@ -192,10 +198,9 @@ public:
      * @tparam Ty Type of resource need to find.
      * @return shared_ptr of its initializer.
      */
-    template <typename Resource>
+    template <typename Resource, auto hash = utils::hash_of<Resource>()>
     [[nodiscard]] auto find() const -> Resource* const {
-        auto hash     = utils::hash_of<Resource>();
-        auto identity = resource_registry::identity(hash);
+        const auto identity = resource_registry::identity(hash);
         if (auto iter = world_->resource_storage_.find(identity);
             iter != world_->resource_storage_.end()) {
             utils::basic_storage* basic_storage = (*iter).second;
@@ -207,14 +212,14 @@ public:
     }
 
 private:
-    template <typename Component>
-    [[nodiscard]] auto has(const entity::id_t& entity) const noexcept -> bool {
-        auto hash     = utils::hash_of<std::remove_cvref_t<Component>>();
-        auto identity = component_registry::identity(hash);
+    template <utils::concepts::pure Component, auto hash = utils::hash_of<Component>()>
+    [[nodiscard]] auto has(const entity::id_t entity) const noexcept -> bool {
+        const auto identity         = component_registry::identity(hash);
+        const entity::index_t index = entity >> num_thirty_two;
         if (auto iter = world_->component_storage_.find(identity);
             iter != world_->component_storage_.cend()) [[likely]] {
             const auto& [map, allocator, reflected] = (*iter).second;
-            return map.contains(entity);
+            return map.contains(index);
         }
         else {
             return false;

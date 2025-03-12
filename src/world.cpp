@@ -8,14 +8,15 @@
 #include "ecs.hpp"
 #include "queryer.hpp"
 #include "resources.hpp"
-#include "scheduler.hpp"
+#include "schedule.hpp"
 
 using namespace atom;
 
 struct atom::ecs::command::command_attorney {
     static inline void update_garbage_collect(command& command) {
         command.update_garbage_collect();
-        command.set<resources::garbage_collect::enable_garbage_collect>({false});
+        using enable = resources::garbage_collect::enable_garbage_collect;
+        command.set<enable>(enable{ false });
     }
     static inline void shutdown_garbage_collect(command& command) {
         command.shutdown_garbage_collect();
@@ -37,7 +38,9 @@ void ecs::world::add_startup(void (*func)(ecs::command&, ecs::queryer&), const p
     startup_systems_.emplace(priority, func);
 }
 
-void ecs::world::add_update(void (*func)(ecs::command&, ecs::queryer&, float), const priority priority) {
+void ecs::world::add_update(
+    void (*func)(ecs::command&, ecs::queryer&, float), const priority priority
+) {
     update_systems_.emplace(priority, func);
 }
 
@@ -47,16 +50,17 @@ void ecs::world::add_shutdown(void (*func)(ecs::command&, ecs::queryer&), const 
 
 /*! @cond TURN_OFF_DOXYGEN */
 
-static inline void startup_garbage_collect(ecs::command& command) {
-    command.add<resources::garbage_collect::enable_garbage_collect>({ false });
+ATOM_RELEASE_INLINE static void startup_garbage_collect(ecs::command& command) {
+    using enable = resources::garbage_collect::enable_garbage_collect;
+    command.add<enable>(enable{ false });
 }
 
-static inline void update_garbage_collect(
+ATOM_RELEASE_INLINE static void update_garbage_collect(
     ::atom::ecs::command& command, ::atom::ecs::queryer& queryer
 ) {
     auto* penable = queryer.find<resources::garbage_collect::enable_garbage_collect>();
     if (!penable) [[unlikely]] {
-        command.add<resources::garbage_collect::enable_garbage_collect&&>({ false });
+        command.add<resources::garbage_collect::enable_garbage_collect>(false);
     }
 
     if (penable->value) [[unlikely]] {
@@ -65,13 +69,13 @@ static inline void update_garbage_collect(
 }
 
 template <typename Systems, typename... Args>
-static inline void call_each_system(Systems& systems, Args&... args) {
+ATOM_RELEASE_INLINE static void call_each_system(Systems& systems, Args&... args) {
 #ifndef ATOM_SINGLE_THREAD
     auto& thread_pool = ECS scheduler::thread_pool();
     for (auto iter = systems.crbegin(); iter != systems.crend();) {
         auto key         = iter->first;
         const auto count = systems.count(key);
-        if (key != ecs::late_main_thread || ecs::early_main_thread) {
+        if (key != ecs::late_main_thread && key != ecs::early_main_thread) {
             std::latch latch(static_cast<std::ptrdiff_t>(count));
             for (auto i = 0; i < count; ++i) {
                 auto backup = iter;
