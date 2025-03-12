@@ -140,4 +140,7 @@ template <
     std::size_t PageSize = utils::k_default_page_size>
 using dense_map = ecs::dense_map<Kty, Ty, PageSize>;
 
+template <typename Ty>
+using shared_ptr = std::shared_ptr<Ty>;
+
 } // namespace atom
