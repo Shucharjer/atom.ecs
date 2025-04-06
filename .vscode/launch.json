@@ -7,11 +7,19 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug",
+            "name": "Lldb",
             "program": "${workspaceFolder}/build/main.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopOnEntry": false
-        }
+        },
+        {
+            "type": "gdb",
+            "request": "launch",
+            "name": "Gdb",
+            "target": "${workspaceFolder}/build/main.exe",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false
+        },
     ]
 }
