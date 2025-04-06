@@ -23,10 +23,7 @@ struct atom::ecs::command::command_attorney {
     }
 };
 
-ecs::world::world() : shutdown_(false), generations_() {
-    // get index from 1
-    generations_.emplace_back(0);
-};
+ecs::world::world() : shutdown_(false), generations_(1, 0) {};
 
 ecs::world::~world() {
     if (!shutdown_) {
