@@ -55,12 +55,12 @@ if(Ecs_INCLUDE_HEADERS)
         $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/include/scheduler.hpp>
         $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/include/world.hpp>
 
-        $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/scheduler.cpp>
+        $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/schedule.cpp>
         $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/world.cpp>
     )
 else()
     target_sources(Ecs INTERFACE
-        $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/scheduler.cpp>
+        $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/schedule.cpp>
         $<BUILD_INTERFACE:${Ecs_SOURCE_DIR}/src/world.cpp>
     )
 endif()
