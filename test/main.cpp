@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <format>
 #include <iostream>
@@ -10,6 +11,7 @@
 #include "asset.hpp"
 #include "command.hpp"
 #include "ecs.hpp"
+#include "generator.hpp"
 #include "queryer.hpp"
 #include "resources.hpp"
 #include "world.hpp"
@@ -92,8 +94,8 @@ void update_model(command& command, queryer& queryer, float delta_time) {
         auto& curr_model = queryer.get<model>(entity);
 
         auto& hub           = hub::instance();
-        library<model>& lib = hub.libs<model>();
-        auto& table         = hub.tables<model>();
+        library<model>& lib = hub.library<model>();
+        auto& table         = hub.table<model>();
         auto& path          = curr_model.path();
         if (!table.contains(path)) {
             auto [handle, ptr] = lib.install(model::proxy{});
@@ -105,6 +107,20 @@ void update_model(command& command, queryer& queryer, float delta_time) {
 void shutdown_model(command& command, queryer& queryer) {}
 
 int main() {
+    // generator
+    {
+        generator<uint64_t> generator;
+        auto i1 = generator.generate();
+        auto i2 = generator.generate();
+        auto i3 = generator.generate();
+        generator.destroy(i2);
+        generator.destroy(i3);
+        auto i4 = generator.generate();
+        auto i5 = generator.generate();
+        auto i6 = generator.generate();
+
+        println(std::format("i1:{},i2:{},i3:{},i4:{},i5:{},i6:{}", i1, i2, i3, i4, i5, i6));
+    }
     try {
         world world;
 
