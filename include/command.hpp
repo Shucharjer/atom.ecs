@@ -167,7 +167,7 @@ private:
             if (map.contains(index)) [[likely]] {
                 auto fn = [](void* ptr, utils::basic_allocator* allocator) -> void {
                     if (ptr) [[likely]] {
-                        std::destroy_at(ptr);
+                        std::destroy_at(static_cast<Component*>(ptr));
                         allocator->dealloc(ptr);
                     }
                 };
