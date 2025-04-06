@@ -202,7 +202,7 @@ public:
     [[nodiscard]] auto find() const -> Resource* const {
         const auto identity = resource_registry::identity(hash);
         if (auto iter = world_->resource_storage_.find(identity);
-            iter != world_->resource_storage_.end()) {
+            iter != world_->resource_storage_.end()) [[likely]] {
             utils::basic_storage* basic_storage = (*iter).second;
             return static_cast<Resource*>(basic_storage->raw());
         }
