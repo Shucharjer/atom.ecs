@@ -27,7 +27,7 @@ struct scheduler {
 
 template <typename Ty, typename... Args>
 inline auto make_shared(Args&&... args) {
-    auto block = nullptr;
+    return nullptr;
 }
 
 } // namespace atom::ecs

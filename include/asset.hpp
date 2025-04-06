@@ -2,14 +2,13 @@
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
-#include <stdexcept>
 #include <auxiliary/singleton.hpp>
 #include <concepts/type.hpp>
 #include <core/langdef.hpp>
 #include <reflection.hpp>
 #include "containers.hpp"
 #include "ecs.hpp"
-#include "thread/corotine.hpp"
+#include "thread/coroutine.hpp"
 
 namespace atom::ecs {
 
@@ -148,6 +147,11 @@ public:
         return mapping_.contains(key);
     }
 
+    /**
+     * @brief Emplace a pair to table.
+     * If the key is already exists, its counter will increase by 1.
+     *
+     */
     void emplace(const key_type& key, const resource_handle handle) noexcept {
         std::unique_lock<std::shared_mutex> ulock(mutex_);
         if (auto iter = mapping_.find(key); iter != mapping_.end()) {
@@ -168,9 +172,42 @@ public:
         return mapping_.at(key).second;
     }
 
+    /**
+     * @brief Erase a pair in table.
+     * Counter dec.
+     */
     void erase(const key_type& key) noexcept {
-        std::unique_lock<std::shared_mutex> ulock(mutex_);
-        mapping_.erase(key);
+        std::shared_lock<std::shared_mutex> slock(mutex_);
+        if (auto iter = mapping_.find(key); iter != mapping_.end()) [[likely]] {
+            auto& [handle, count] = iter->second;
+            slock.unlock();
+            std::unique_lock<std::shared_mutex> ulock(mutex_);
+            --count;
+            if (!count) {
+                mapping_.erase(iter);
+            }
+        }
+    }
+
+    /**
+     * @brief Erase a pair in table.
+     * Counter dec.
+     */
+    void erase(library<Asset>& library, const key_type& key) noexcept {
+        std::shared_lock<std::shared_mutex> slock(mutex_);
+        if (auto iter = mapping_.find(key); iter != mapping_.end()) [[likely]] {
+            auto& [handle, count] = iter->second;
+            slock.unlock();
+            std::unique_lock<std::shared_mutex> ulock(mutex_);
+            --count;
+            if (!count) {
+                ulock.unlock();
+                library.uninstall(handle);
+                ulock.lock();
+
+                mapping_.erase(iter);
+            }
+        }
     }
 
 private:
@@ -188,7 +225,7 @@ class hub : public utils::singleton<hub> {
             return iter->second;
         }
         else [[unlikely]] {
-            auto ptr  = std::make_unique<library<Asset>>();
+            auto ptr  = std::make_unique<ecs::library<Asset>>();
             auto& lib = libs_[hash] = std::move(ptr);
             return lib;
         }
@@ -200,7 +237,7 @@ class hub : public utils::singleton<hub> {
             return iter->second;
         }
         else [[unlikely]] {
-            auto ptr    = std::make_unique<table<Asset>>();
+            auto ptr    = std::make_unique<ecs::table<Asset>>();
             auto& table = tables_[hash] = std::move(ptr);
             return table;
         }
@@ -209,19 +246,19 @@ class hub : public utils::singleton<hub> {
 public:
     // NOTE: generally, we will not uninstall a whole library.
     template <concepts::asset Asset>
-    [[nodiscard]] auto libs() -> library<Asset>& {
+    [[nodiscard]] auto library() -> library<Asset>& {
         static_assert(utils::concepts::pure<Asset>);
         std::unique_ptr<basic_library>& lib = find_lib<Asset>();
         auto* ptr                           = lib.get();
-        return *static_cast<library<Asset>*>(ptr);
+        return *static_cast<ecs::library<Asset>*>(ptr);
     }
 
     template <concepts::asset Asset>
-    [[nodiscard]] auto tables() -> table<Asset>& {
+    [[nodiscard]] auto table() -> table<Asset>& {
         static_assert(utils::concepts::pure<Asset>);
         std::unique_ptr<basic_table>& tab = find_table<Asset>();
         auto* ptr                         = tab.get();
-        return *static_cast<table<Asset>*>(ptr);
+        return *static_cast<ecs::table<Asset>*>(ptr);
     }
 
 private:
@@ -234,36 +271,36 @@ private:
 } // namespace atom::ecs
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::text> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::text> {
     constexpr static std::string_view value = "text";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::sound> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::sound> {
     constexpr static std::string_view value = "sound";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::model> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::model> {
     constexpr static std::string_view value = "model";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::material> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::material> {
     constexpr static std::string_view value = "material";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::texture> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::texture> {
     constexpr static std::string_view value = "texture";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::shader> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::shader> {
     constexpr static std::string_view value = "shader";
 };
 
 template <>
-struct ::atom::ecs::asset_string<atom::ecs::asset_type::shader_program> {
+struct atom::ecs::asset_string<atom::ecs::asset_type::shader_program> {
     constexpr static std::string_view value = "shader_program";
 };
