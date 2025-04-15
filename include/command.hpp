@@ -64,7 +64,7 @@ private:
 public:
     template <utils::concepts::pure... Components>
     auto attach(const ECS entity::id_t entity) -> void {
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (attach_impl<Components>(index), ...);
     }
 
@@ -93,7 +93,7 @@ private:
 public:
     template <utils::concepts::pure... Components, typename... ComponentTys>
     void attach(const entity::id_t entity, ComponentTys&&... components) {
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (attach_impl<Components>(index, std::forward<ComponentTys>(components)), ...);
     }
 
@@ -108,7 +108,7 @@ public:
             world_->generations_.emplace_back(0);
         }
 
-        entity::id_t entity = ((entity::id_t)index << num_thirty_two) | world_->generations_[index];
+        entity::id_t entity = ((entity::id_t)index << magic_32) | world_->generations_[index];
 
         world_->living_entities_.emplace(entity);
 
@@ -119,7 +119,7 @@ public:
     requires std::conjunction_v<std::is_same<std::remove_cvref_t<Components>, Components>...>
     auto spawn() -> ECS entity::id_t {
         auto entity                 = spawn();
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (attach_impl<Components>(index), ...);
         return entity;
     }
@@ -127,7 +127,7 @@ public:
     template <utils::concepts::pure... Components, typename... ComponentTys>
     auto spawn(ComponentTys&&... components) -> entity::id_t {
         auto entity                 = spawn();
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (attach_impl<Components>(index, std::forward<ComponentTys>(components)), ...);
         return entity;
     }
@@ -152,7 +152,7 @@ private:
 public:
     template <typename... Components>
     auto modify(const ECS entity::id_t entity, Components&&... components) -> void {
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (modify_impl<Components>(index, std::forward<Components>(components)), ...);
     }
 
@@ -180,7 +180,7 @@ private:
 public:
     template <typename... Components>
     auto detach(const ECS entity::id_t entity) -> void {
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         (detach_impl<Components>(index), ...);
     }
 
@@ -308,7 +308,7 @@ private:
 
         // whole entity
         for (auto entity : world_->pending_destroy_) {
-            const entity::index_t index = entity >> num_thirty_two;
+            const entity::index_t index = entity >> magic_32;
             for (auto& [map, allocator, reflected] :
                  world_->component_storage_ | std::views::values) {
                 if (auto iter = map.find(index); iter != map.end()) {

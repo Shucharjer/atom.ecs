@@ -111,12 +111,12 @@ public:
     }
 
     [[nodiscard]] auto index(const entity::id_t entity) const noexcept -> entity::index_t {
-        return static_cast<entity::index_t>(entity >> num_thirty_two);
+        return static_cast<entity::index_t>(entity >> magic_32);
     }
 
     [[nodiscard]] auto generation(const entity::id_t entity) const noexcept
         -> entity::generation_t {
-        return (entity << num_thirty_two) >> num_thirty_two;
+        return (entity << magic_32) >> magic_32;
     }
 
     /**
@@ -132,7 +132,7 @@ public:
     template <typename Component, auto hash = utils::hash_of<Component>()>
     [[nodiscard]] auto get(const entity::id_t entity) -> Component& {
         const auto identity         = component_registry::identity(hash);
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
 
         // find the tuple
         if (auto iter = world_->component_storage_.find(identity);
@@ -176,7 +176,7 @@ public:
     template <typename Component, auto hash = utils::hash_of<Component>()>
     [[nodiscard]] auto get(const entity::id_t entity) const -> const Component& {
         const auto identity         = component_registry::identity(hash);
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
 
         if (auto iter = world_->component_storage_.find(identity);
             iter != world_->component_storage_.cend()) [[likely]] {
@@ -215,7 +215,7 @@ private:
     template <utils::concepts::pure Component, auto hash = utils::hash_of<Component>()>
     [[nodiscard]] auto has(const entity::id_t entity) const noexcept -> bool {
         const auto identity         = component_registry::identity(hash);
-        const entity::index_t index = entity >> num_thirty_two;
+        const entity::index_t index = entity >> magic_32;
         if (auto iter = world_->component_storage_.find(identity);
             iter != world_->component_storage_.cend()) [[likely]] {
             const auto& [map, allocator, reflected] = (*iter).second;
