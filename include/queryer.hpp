@@ -135,8 +135,8 @@ public:
         const entity::index_t index = entity >> magic_32;
 
         // find the tuple
-        if (auto iter = world_->component_storage_.find(identity);
-            iter != world_->component_storage_.end()) [[likely]] {
+        auto iter = world_->component_storage_.find(identity);
+        if (iter != world_->component_storage_.end()) [[likely]] {
             auto& pair                              = *iter;
             auto& [map, basic_allocator, reflected] = pair.second;
 
@@ -210,6 +210,8 @@ public:
             return static_cast<Resource*>(nullptr);
         }
     }
+
+    auto current_world() noexcept -> world* { return world_; }
 
 private:
     template <utils::concepts::pure Component, auto hash = utils::hash_of<Component>()>
